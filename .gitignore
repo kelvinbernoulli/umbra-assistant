@@ -1,1 +1,25 @@
 .env
+.env.*
+!.env.example
+
+# Python environments and caches
+umbra-env/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local databases and test artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.log
+test-results/
+coverage.xml
+.env

@@ -81,14 +81,18 @@ umbra-assistant/
 │   │   ├── api/
 │   │   │   ├── deps.py                    # shared dependencies (auth, db)
 │   │   │   ├── v1/
-│   │   │   │   ├── webhooks_whatsapp.py
-│   │   │   │   ├── webhooks_email.py
-│   │   │   │   ├── webhooks_calendar.py
-│   │   │   │   ├── brief.py               # GET /brief/today
-│   │   │   │   ├── timeline.py            # GET /timeline (+ SSE stream)
-│   │   │   │   ├── search.py              # POST /search (semantic)
-│   │   │   │   ├── commands.py            # POST /command (NL task creation)
-│   │   │   │   └── connections.py         # CRUD for integration tokens
+│   │   │   │   ├── router.py              # composes all versioned routers
+│   │   │   │   └── routes/
+│   │   │   │       ├── brief.py           # GET /brief/today
+│   │   │   │       ├── timeline.py        # GET /timeline (+ SSE stream)
+│   │   │   │       ├── search.py          # POST /search (semantic)
+│   │   │   │       ├── commands.py        # POST /commands (NL task creation)
+│   │   │   │       ├── connections.py     # CRUD for integration tokens
+│   │   │   │       ├── type_registry.py   # source/document type routes
+│   │   │   │       └── webhooks/
+│   │   │   │           ├── whatsapp.py
+│   │   │   │           ├── email.py
+│   │   │   │           └── calendar.py
 │   │   ├── services/
 │   │   │   ├── ingestion/
 │   │   │   │   ├── normalizer.py          # raw payload -> canonical Document
@@ -422,7 +426,7 @@ def build_agent_executor(user_id: str) -> AgentExecutor:
 
 async def run_command(user_id: str, command_text: str, chat_history: list | None = None) -> dict:
     """
-    Entry point called by app/api/v1/commands.py.
+    Entry point called by app/api/v1/routes/commands.py.
     """
     executor = build_agent_executor(user_id)
     result = await executor.ainvoke({

@@ -1,6 +1,11 @@
 import sqlite3
 from pathlib import Path
+
 from app.core.security import Security
+
+
+def _default_db_path() -> Path:
+    return Path("./data/credentials.db")
 
 
 class CredentialStore:
@@ -42,3 +47,13 @@ class CredentialStore:
         ).fetchone()
         conn.close()
         return self.secret.decrypt(row[0]) if row else None
+
+
+def list_connection_statuses(user_id: str) -> list[dict[str, object]]:
+    """Return a minimal status list for the connections endpoint."""
+    return []
+
+
+def revoke_credential(user_id: str, provider: str) -> None:
+    """Placeholder revoke operation used by the connections endpoint."""
+    return None

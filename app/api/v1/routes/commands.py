@@ -1,7 +1,9 @@
+"""Natural-language command HTTP routes."""
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/v1/commands", tags=["Commands"])
+router = APIRouter(prefix="/commands", tags=["Commands"])
 
 class CommandRequest(BaseModel):
     text: str
