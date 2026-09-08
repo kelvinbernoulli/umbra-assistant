@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     DATABASE_URL: str = "sqlite:///./umbra.db"
     MAX_INGESTION_ATTEMPTS: int = 3
+    RETRY_SCHEDULER_ENABLED: bool = False
+    RETRY_INTERVAL_SECONDS: int = 300
+    RETRY_BATCH_LIMIT: int = 100
 
     # --- Auth (placeholder — swap for real auth provider before prod) ---
     SECRET_KEY: str | None = None

@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: umbra_test
+      POSTGRES_USER: umbra
+      POSTGRES_PASSWORD: umbra
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umbra -d umbra_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - umbra-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  umbra-postgres-data:

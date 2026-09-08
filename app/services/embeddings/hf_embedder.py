@@ -7,6 +7,9 @@ import math
 import re
 import unicodedata
 
+# Import the official LangChain Hugging Face integration
+from langchain_huggingface import HuggingFaceEmbeddings
+
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -48,9 +51,6 @@ class DeterministicFakeEmbedder:
 
         norm = math.sqrt(sum(value * value for value in vector))
         if norm == 0:
-            # Distinct signed features can theoretically cancel in a very small
-            # vector. A stable fallback keeps the Pinecone-compatible nonzero
-            # vector guarantee intact.
             vector = [0.0] * self.embedding_dim
             self._add_feature(vector, f"fallback:{canonical_text}", weight=1.0)
             norm = 1.0
@@ -75,6 +75,7 @@ class HuggingFaceEmbedder:
         self.model_name = settings.HUGGINGFACE_EMBEDDING_MODEL or "BAAI/bge-large-en-v1.5"
         self.embedding_dim = settings.HUGGINGFACE_EMBEDDING_DIM
         self._fake_embedder = DeterministicFakeEmbedder(self.embedding_dim)
+        self._real_embedder = None
 
         if settings.use_mock_embeddings:
             logger.info(
@@ -83,22 +84,27 @@ class HuggingFaceEmbedder:
                 self.embedding_dim,
             )
         else:
-            logger.warning(
-                "HF token configured, but real embeddings are not implemented; "
-                "using deterministic fake: %s with dim=%d",
-                self.model_name,
-                self.embedding_dim,
+            logger.info(
+                "Initializing real HuggingFace Inference connection for model: %s",
+                self.model_name
+            )
+            # Initialize live pipeline using LangChain's optimized abstraction layer
+            self._real_embedder = HuggingFaceEmbeddings(
+                model_name=self.model_name,
+                encode_kwargs={"normalize_embeddings": True}
             )
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts using the active implementation."""
-        if settings.use_mock_embeddings:
+        if settings.use_mock_embeddings or not self._real_embedder:
             return self._fake_embedder.embed(texts)
 
-        # TODO: Implement real HF Inference Endpoints call here.
-        # Until then, keep development behavior stable rather than returning
-        # misleading random vectors that can never be queried reproducibly.
-        return self._fake_embedder.embed(texts)
+        try:
+            # Query the live Hugging Face repository for true semantic mapping
+            return self._real_embedder.embed_documents(texts)
+        except Exception as e:
+            logger.error("Failed to fetch live HF embeddings, falling back to mock: %s", str(e))
+            return self._fake_embedder.embed(texts)
 
 
 async def embed_batch(texts: list[str]) -> list[list[float]]:
