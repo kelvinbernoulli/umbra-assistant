@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # --- App ---
     APP_NAME: str = "Umbra Assistant"
+    APP_PORT: int = 8080
     APP_ENV: str | None = None  # local | staging | production
     DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
