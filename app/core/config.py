@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     RETRY_INTERVAL_SECONDS: int = 300
     RETRY_BATCH_LIMIT: int = 100
 
-    # --- Auth (placeholder — swap for real auth provider before prod) ---
+    # --- Browser authentication ---
+    FRONTEND_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "https://umbra-assistant-ui.vercel.app"]
+    SESSION_COOKIE_SECURE: bool = True
     SECRET_KEY: str | None = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
@@ -47,6 +49,7 @@ class Settings(BaseSettings):
     SENDGRID_INBOUND_SECRET: str | None = None
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_CALLBACK_URL: str | None = None
 
     # --- Credential store (encrypted token storage, NOT Pinecone) ---
     CREDENTIAL_DB_URL: str | None = None  # e.g. sqlite:///./data/credentials.db
@@ -56,15 +59,6 @@ class Settings(BaseSettings):
     MESSAGE_TTL_DAYS: int = 90
     SUMMARY_TTL_DAYS: int = 730
 
-    @property
-    def use_mock_vectorstore(self) -> bool:
-        """No Pinecone key configured -> fall back to an in-memory mock store."""
-        return not self.PINECONE_API_KEY
-
-    @property
-    def use_mock_embeddings(self) -> bool:
-        """No Hugging Face token configured -> fall back to a deterministic local mock embedder."""
-        return not self.HUGGINGFACE_API_TOKEN
 
 
 @lru_cache

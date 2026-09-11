@@ -50,10 +50,10 @@ class CredentialStore:
 
 
 def list_connection_statuses(user_id: str) -> list[dict[str, object]]:
-    """Return a minimal status list for the connections endpoint."""
-    return []
+    from app.services.google_connections import list_statuses
+    return list_statuses(user_id)
 
 
 def revoke_credential(user_id: str, provider: str) -> None:
-    """Placeholder revoke operation used by the connections endpoint."""
-    return None
+    from app.services.google_connections import disconnect
+    disconnect(user_id, provider)

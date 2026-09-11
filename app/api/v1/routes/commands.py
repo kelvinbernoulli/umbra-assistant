@@ -1,6 +1,6 @@
 """Natural-language command HTTP routes."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/commands", tags=["Commands"])
@@ -14,4 +14,4 @@ class CommandResponse(BaseModel):
 
 @router.post("", response_model=CommandResponse)
 async def submit_command(request: CommandRequest):
-    return CommandResponse(success=True, message=f"Command received: {request.text}")
+    raise HTTPException(status_code=501, detail="Command execution is not implemented.")

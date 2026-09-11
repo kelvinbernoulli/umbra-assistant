@@ -4,6 +4,8 @@ from fastapi import APIRouter
 
 from app.api.v1.routes import (
     brief,
+    session_auth,
+    auth,
     commands,
     connections,
     search,
@@ -26,3 +28,6 @@ api_router.include_router(commands.router, tags=["commands"])
 api_router.include_router(connections.router, tags=["connections"])
 api_router.include_router(type_registry.router, prefix="/types", tags=["types"])
 api_router.include_router(workspace.router, tags=["workspaces"])
+
+api_router.include_router(session_auth.router)
+api_router.include_router(auth.router)

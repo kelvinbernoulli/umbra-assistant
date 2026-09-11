@@ -1,14 +1,7 @@
-"""
-Thin wrapper around the Pinecone SDK, plus an in-memory mock implementation
-used automatically when PINECONE_API_KEY is not configured.
-
-Both implementations expose the same minimal interface (upsert / query)
-so the rest of the app never needs to know which one is active.
-"""
+"""Pinecone vector storage client."""
 
 from __future__ import annotations
 
-import math
 import threading
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,7 +26,7 @@ class QueryResult:
 
 
 class VectorStoreClient:
-    """Interface both the real and mock clients implement."""
+    """Interface for vector storage operations."""
 
     def upsert(self, namespace: str, vectors: list[tuple[str, list[float], dict]]) -> None:
         raise NotImplementedError
@@ -50,52 +43,6 @@ class VectorStoreClient:
 
     def delete(self, namespace: str, ids: list[str]) -> None:
         raise NotImplementedError
-
-
-class MockVectorStoreClient(VectorStoreClient):
-    """
-    In-memory, thread-safe, namespace-isolated vector store.
-    Cosine similarity over Python lists — fine for dev/test volumes,
-    not intended for production scale.
-    """
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        # namespace -> {id: (vector, metadata)}
-        self._store: dict[str, dict[str, tuple[list[float], dict]]] = {}
-
-    def upsert(self, namespace: str, vectors: list[tuple[str, list[float], dict]]) -> None:
-        with self._lock:
-            bucket = self._store.setdefault(namespace, {})
-            for vec_id, vector, metadata in vectors:
-                bucket[vec_id] = (vector, metadata)
-        logger.debug("Mock upsert: ns=%s count=%d", namespace, len(vectors))
-
-    def query(
-        self,
-        namespace: str,
-        vector: list[float],
-        top_k: int = 5,
-        filter: dict[str, Any] | None = None,
-        include_metadata: bool = True,
-    ) -> QueryResult:
-        with self._lock:
-            bucket = self._store.get(namespace, {})
-            scored: list[VectorMatch] = []
-            for vec_id, (stored_vec, metadata) in bucket.items():
-                if not _matches_filter(metadata, filter):
-                    continue
-                score = _cosine_similarity(vector, stored_vec)
-                scored.append(VectorMatch(id=vec_id, score=score, metadata=metadata))
-
-        scored.sort(key=lambda m: m.score, reverse=True)
-        return QueryResult(matches=scored[:top_k])
-
-    def delete(self, namespace: str, ids: list[str]) -> None:
-        with self._lock:
-            bucket = self._store.get(namespace, {})
-            for vec_id in ids:
-                bucket.pop(vec_id, None)
 
 
 class RealPineconeClient(VectorStoreClient):
@@ -142,33 +89,8 @@ class RealPineconeClient(VectorStoreClient):
         self._index.delete(ids=ids, namespace=namespace)
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    if len(a) != len(b):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
-def _matches_filter(metadata: dict, filter: dict[str, Any] | None) -> bool:
-    """Supports the small subset of Pinecone filter syntax this app uses: {"field": {"$eq": val}}."""
-    if not filter:
-        return True
-    for field_name, condition in filter.items():
-        if isinstance(condition, dict) and "$eq" in condition:
-            if metadata.get(field_name) != condition["$eq"]:
-                return False
-        else:
-            if metadata.get(field_name) != condition:
-                return False
-    return True
-
-
 class PineconeClient:
-    """Module-level accessor returning the active client (real or mock), singleton per process."""
+    """Module-level accessor returning the Pinecone client, singleton per process."""
 
     _instance: VectorStoreClient | None = None
     _lock = threading.Lock()
@@ -178,12 +100,7 @@ class PineconeClient:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    if settings.use_mock_vectorstore:
-                        logger.warning(
-                            "PINECONE_API_KEY not set — using in-memory MockVectorStoreClient. "
-                            "Data will NOT persist across restarts."
-                        )
-                        cls._instance = MockVectorStoreClient()
-                    else:
-                        cls._instance = RealPineconeClient()
+                    if not settings.PINECONE_API_KEY:
+                        raise VectorStoreError("PINECONE_API_KEY is required for vector storage.")
+                    cls._instance = RealPineconeClient()
         return cls._instance

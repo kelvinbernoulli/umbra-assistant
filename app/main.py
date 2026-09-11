@@ -51,7 +51,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173,https://umbra-assistant-ui.vercel.app/"],  # Vite dev server
+        allow_origins=settings.FRONTEND_ORIGINS,  # Vite dev server
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -68,15 +68,13 @@ def create_app() -> FastAPI:
             "status": "ok",
             "app": settings.APP_NAME,
             "env": settings.APP_ENV,
-            "using_mock_vectorstore": settings.use_mock_vectorstore,
-            "using_mock_embeddings": settings.use_mock_embeddings,
         }
 
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
     logger.info(
-        "Umbra backend started | env=%s mock_vectorstore=%s mock_embeddings=%s",
-        settings.APP_ENV, settings.use_mock_vectorstore, settings.use_mock_embeddings,
+        "Umbra backend started | env=%s",
+        settings.APP_ENV,
     )
     return app
 

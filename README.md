@@ -52,3 +52,12 @@ The scheduler runs at most one retry batch at a time and is shut down with the a
 ```powershell
 .\umbra-env\Scripts\python.exe -m app.workers.retry_failed --limit 100
 ```
+
+## Runtime data
+
+Vector storage requires `PINECONE_API_KEY` and a configured Pinecone index.
+Embeddings use the actual Hugging Face model locally (default:
+`BAAI/bge-large-en-v1.5`); its weights must be cached or downloadable.
+There is no in-memory vector store or synthetic embedding fallback.
+Model and storage failures propagate to callers and ingestion retry handling.
+Morning briefs and command execution return HTTP 501 until implemented.
