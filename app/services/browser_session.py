@@ -18,13 +18,15 @@ def digest(value: str) -> str:
 
 def require_browser_origin(request: Request) -> None:
     if (request.headers.get("origin") not in settings.FRONTEND_ORIGINS
-            or request.headers.get("x-requested-with") != "XmlHttpRequest"):
+            or request.headers.get("x-requested-with") != "XMLHttpRequest"):
         raise HTTPException(403, "Invalid browser request origin.")
 
 
 def session_user(request: Request, db: Session) -> GoogleUser:
     raw = request.cookies.get(SESSION_COOKIE)
-    session = db.get(BrowserSession, digest(raw)) if raw else None
+    if not raw:
+        raise HTTPException(401, "Please sign in to Umbra.")
+    session = db.get(BrowserSession, digest(raw))
     if session is None or session.expires_at <= int(time.time()):
         raise HTTPException(401, "Please sign in to Umbra.")
     user = db.get(GoogleUser, session.user_id)

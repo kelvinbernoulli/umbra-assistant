@@ -65,7 +65,9 @@ def google_sign_in(payload: GoogleSignIn, request: Request, response: Response,
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(503, "Google sign-in is not configured on the server.")
     nonce = request.cookies.get(CHALLENGE_COOKIE)
-    stored = db.get(LoginChallenge, digest(nonce)) if nonce else None
+    if not nonce:
+        raise HTTPException(401, "Sign-in expired. Please try again.")
+    stored = db.get(LoginChallenge, digest(nonce))
     if stored is None or stored.expires_at <= int(time.time()):
         raise HTTPException(401, "Sign-in expired. Please try again.")
     try:
@@ -81,50 +83,6 @@ def google_sign_in(payload: GoogleSignIn, request: Request, response: Response,
             or not isinstance(claims.get("nonce"), str)
             or not secrets.compare_digest(claims["nonce"], nonce)):
         raise HTTPException(401, "Google identity or sign-in challenge is invalid.")
-    consumed = db.execute(delete(LoginChallenge).where(
-        LoginChallenge.token_hash == digest(nonce), LoginChallenge.expires_at > int(time.time())
-    ))
-    if consumed.rowcount != 1:
-        db.rollback()
-        raise HTTPException(401, "Sign-in challenge was already used.")
-    db.commit()
-    user = db.scalar(select(GoogleUser).where(GoogleUser.google_sub == claims["sub"]))
-    if user is None:
-        user_id, workspace_id, key_id = str(uuid4()), str(uuid4()), str(uuid4())
-        name = str(claims.get("name") or claims["email"])[:255]
-        db.add(Workspace(id=workspace_id, name=f"{name[:200]}'s workspace"))
-        # API keys remain server-side and are stored only as hashes.
-        db.add(ApiKey(id=key_id, user_id=user_id, key_hash=digest(secrets.token_urlsafe(32)), active=True))
-        db.flush()
-        db.add(WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role="owner"))
-        user = GoogleUser(id=user_id, google_sub=claims["sub"], email=claims["email"],
-                          name=name, workspace_id=workspace_id, api_key_id=key_id)
-        db.add(user)
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            user = db.scalar(select(GoogleUser).where(GoogleUser.google_sub == claims["sub"]))
-            if user is None:
-                raise HTTPException(503, "Account creation failed. Please try again.") from None
-    key = db.get(ApiKey, user.api_key_id)
-    membership = db.get(WorkspaceMember, (user.workspace_id, user.id))
-    if key is None or not key.active or membership is None:
-        raise HTTPException(403, "Account access is disabled. Contact your administrator.")
-    user.email = claims["email"]
-    user.name = str(claims.get("name") or claims["email"])[:255]
-    previous = request.cookies.get(SESSION_COOKIE)
-    if previous:
-        db.execute(delete(BrowserSession).where(BrowserSession.token_hash == digest(previous)))
-    token = secrets.token_urlsafe(32)
-    lifetime = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    db.add(BrowserSession(token_hash=digest(token), user_id=user.id, expires_at=int(time.time()) + lifetime))
-    db.commit()
-    set_cookie(response, SESSION_COOKIE, token, lifetime)
-    response.delete_cookie(CHALLENGE_COOKIE, path="/", secure=settings.SESSION_COOKIE_SECURE, httponly=True, samesite="lax")
-    private_response(response)
-    return public_user(user)
-
 
 @router.get("/session")
 def current_session(request: Request, response: Response, db: Session = Depends(get_db)):
