@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     RETRY_BATCH_LIMIT: int = 100
 
     # --- Browser authentication ---
-    FRONTEND_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "https://umbra-assistant-ui.vercel.app"]
+    FRONTEND_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://localhost:4173", "https://umbra-assistant-ui.vercel.app"]
     SESSION_COOKIE_SECURE: bool = True
     SECRET_KEY: str | None = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
