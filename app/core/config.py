@@ -48,9 +48,9 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str | None = None
     WHATSAPP_APP_SECRET: str | None = None
     SENDGRID_INBOUND_SECRET: str | None = None
-    GOOGLE_CLIENT_ID: str | None = None
-    GOOGLE_CLIENT_SECRET: str | None = None
-    GOOGLE_CALLBACK_URL: str | None = None
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_CALLBACK_URL: str
 
     # --- Credential store (encrypted token storage, NOT Pinecone) ---
     CREDENTIAL_DB_URL: str | None = None  # e.g. sqlite:///./data/credentials.db

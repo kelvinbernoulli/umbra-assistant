@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi_sso.sso.google import GoogleSSO
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -61,11 +62,23 @@ def create_app() -> FastAPI:
     async def umbra_error_handler(request: Request, exc: UmbraError):
         logger.error("UmbraError on %s: %s", request.url.path, exc.message)
         return JSONResponse(content={"detail": exc.message}, status_code=exc.status_code,)
+    
+    google_sso = GoogleSSO(
+    client_id=settings.GOOGLE_CLIENT_ID,
+    client_secret=settings.GOOGLE_CLIENT_SECRET,
+    redirect_uri=settings.GOOGLE_CALLBACK_URL,
+    allow_insecure_http=True  # Set to False in production (requires HTTPS)
+    )
+
+    @app.get("/")
+    async def root():
+        return {"message": "Welcome! Go to /auth/login to sign in with Google."}
+
 
     @app.get("/health")
     async def health():
         return {
-            "status": "ok",
+            "status": "Ok",
             "app": settings.APP_NAME,
             "env": settings.APP_ENV,
         }
