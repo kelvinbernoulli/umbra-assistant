@@ -28,7 +28,7 @@ def save_google_calendar_token(
     origin: str | None = Header(None),
     x_requested_with: str | None = Header(None),
 ):
-    if origin not in allowed_origins() or x_requested_with != "XmlHttpRequest":
+    if origin not in allowed_origins() or (x_requested_with or "").lower() != "xmlhttprequest":
         raise HTTPException(403, "Invalid Google authorization origin or request header.")
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(503, "Google Calendar is not configured on the server.")
@@ -45,7 +45,6 @@ def save_google_calendar_token(
         )
         flow.fetch_token(code=payload.code, timeout=20)
         token = flow.credentials.refresh_token
-        print(flow)
     except Exception:
         # OAuth exceptions can contain sensitive tokens or client credentials.
         raise HTTPException(400, "Google authorization failed. Please connect again.") from None

@@ -18,7 +18,7 @@ def digest(value: str) -> str:
 
 def require_browser_origin(request: Request) -> None:
     if (request.headers.get("origin") not in settings.FRONTEND_ORIGINS
-            or request.headers.get("x-requested-with") != "XMLHttpRequest"):
+            or request.headers.get("x-requested-with", "").lower() != "xmlhttprequest"):
         raise HTTPException(403, "Invalid browser request origin.")
 
 

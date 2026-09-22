@@ -54,6 +54,28 @@ def login(client, claims):
 def count(db, model):
     return db.scalar(select(func.count()).select_from(model))
 
+
+@pytest.mark.parametrize('message, reason', [
+    ('Token used too early, private token detail', 'token_not_yet_valid'),
+    ('Token expired, private token detail', 'token_expired'),
+    ('Token has wrong audience private token detail', 'client_id_mismatch'),
+    ('Could not verify token signature.', 'invalid_signature'),
+    ('private token detail', 'invalid_google_token'),
+])
+def test_verification_diagnostics_do_not_expose_credentials(setup, monkeypatch, caplog, message, reason):
+    client, factory, claims = setup
+    def reject(*args, **kwargs):
+        raise ValueError(message)
+    monkeypatch.setattr(auth.id_token, 'verify_oauth2_token', reject)
+    response = login(client, claims)
+    assert response.status_code == 401
+    assert response.headers['x-auth-error'] == reason
+    assert reason in caplog.text
+    assert 'private token detail' not in response.text + caplog.text
+    assert 'umbra_session' not in client.cookies
+    with factory() as db:
+        assert count(db, GoogleUser) == count(db, BrowserSession) == 0
+
 def test_signup_hashes_secrets_and_restores_workspace(setup):
     client, factory, claims = setup
     response = login(client, claims)
@@ -160,7 +182,8 @@ def test_secure_cookie_configuration(setup, monkeypatch):
     assert 'Secure' in response.headers['set-cookie']
     assert 'HttpOnly' in response.headers['set-cookie']
 
-def test_calendar_uses_session_identity_without_api_key(setup, monkeypatch):
+@pytest.mark.parametrize('header_value', ['XMLHttpRequest', 'XmlHttpRequest'])
+def test_calendar_uses_session_identity_without_api_key(setup, monkeypatch, header_value):
     from types import SimpleNamespace
     from app.api.v1.routes import auth as calendar_auth
     client, factory, claims = setup
@@ -171,9 +194,37 @@ def test_calendar_uses_session_identity_without_api_key(setup, monkeypatch):
         fetch_token=lambda **kwargs: None, credentials=SimpleNamespace(refresh_token='refresh-token')))
     saved = []
     monkeypatch.setattr(calendar_auth, 'save_refresh_token', lambda user_id, token: saved.append((user_id, token)))
-    response = client.post('/api/v1/auth/google/save', json={'code': 'calendar-code'}, headers=HEADERS)
+    response = client.post('/api/v1/auth/google/save', json={'code': 'calendar-code'}, headers=HEADERS | {'X-Requested-With': header_value})
     assert response.status_code == 200
     assert saved == [(user, 'refresh-token')]
+
+
+def test_frontend_header_completes_login_and_consumes_challenge(setup):
+    client, factory, claims = setup
+    headers = HEADERS | {'X-Requested-With': 'XMLHttpRequest'}
+    challenge = client.post('/api/v1/auth/challenge', headers=headers)
+    assert challenge.status_code == 200
+    claims['nonce'] = challenge.json()['nonce']
+    response = client.post('/api/v1/auth/google', json={'credential': 'valid'}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()['user']['email'] == claims['email']
+    assert 'umbra_login_challenge' not in client.cookies
+    with factory() as db:
+        assert count(db, LoginChallenge) == 0
+    assert client.post('/records', headers=headers).status_code == 200
+    assert client.post('/api/v1/auth/logout', headers=headers).status_code == 204
+
+
+@pytest.mark.parametrize('failure', ['disabled', 'membership'])
+def test_login_does_not_restore_revoked_access(setup, failure):
+    client, factory, claims = setup
+    login(client, claims)
+    with factory() as db:
+        if failure == 'disabled': db.scalar(select(ApiKey)).active = False
+        if failure == 'membership': db.delete(db.scalar(select(WorkspaceMember)))
+        db.commit()
+    assert login(client, claims).status_code == 403
+    assert client.get('/api/v1/auth/session').status_code == 401
 
 def test_migration_creates_session_schema():
     import importlib.util

@@ -30,5 +30,4 @@ api_router.include_router(connections.router, tags=["connections"])
 api_router.include_router(type_registry.router, prefix="/types", tags=["types"])
 api_router.include_router(workspace.router, tags=["workspaces"])
 
-api_router.include_router(session_auth.router)
 api_router.include_router(auth.router)
