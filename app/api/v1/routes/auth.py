@@ -2,14 +2,14 @@
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from google_auth_oauthlib.flow import Flow
+from oauthlib.oauth2.rfc6749.tokens import OAuth2Token
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_current_user_id
 from app.core.config import settings
-from app.services.google_connections import cipher, save_refresh_token
+from app.services.google_connections import CALENDAR_SCOPE, cipher, save_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 
 
 class GoogleAuthPayload(BaseModel):
@@ -43,8 +43,18 @@ def save_google_calendar_token(
             }},
             scopes=[CALENDAR_SCOPE], redirect_uri=origin,
         )
-        flow.fetch_token(code=payload.code, timeout=20)
-        token = flow.credentials.refresh_token
+        try:
+            flow.fetch_token(code=payload.code, timeout=20)
+        except Warning as warning:
+            # Google may include previously granted identity scopes.
+            granted = getattr(warning, "token", None)
+            if not isinstance(granted, OAuth2Token) or CALENDAR_SCOPE not in granted.scopes:
+                raise
+            token = granted.get("refresh_token")
+        else:
+            if not flow.credentials.has_scopes([CALENDAR_SCOPE]):
+                raise ValueError("Calendar event access was not granted")
+            token = flow.credentials.refresh_token
     except Exception:
         # OAuth exceptions can contain sensitive tokens or client credentials.
         raise HTTPException(400, "Google authorization failed. Please connect again.") from None

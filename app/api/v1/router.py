@@ -8,6 +8,7 @@ from app.api.v1.routes import (
     auth,
     commands,
     connections,
+    calendar_events,
     search,
     timeline,
     type_registry,
@@ -27,6 +28,7 @@ api_router.include_router(timeline.router, tags=["timeline"])
 api_router.include_router(search.router, tags=["search"])
 api_router.include_router(commands.router, tags=["commands"])
 api_router.include_router(connections.router, tags=["connections"])
+api_router.include_router(calendar_events.router)
 api_router.include_router(type_registry.router, prefix="/types", tags=["types"])
 api_router.include_router(workspace.router, tags=["workspaces"])
 

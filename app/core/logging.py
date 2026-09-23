@@ -28,6 +28,9 @@ def configure_logging() -> None:
     # Quiet noisy third-party loggers unless we're actively debugging them
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    # OAuth debug output includes client secrets and complete token responses.
+    for name in ("requests_oauthlib", "oauthlib", "google_auth_oauthlib"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

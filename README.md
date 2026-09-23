@@ -86,7 +86,62 @@ The scheduler runs at most one retry batch at a time and is shut down with the a
 .\umbra-env\Scripts\python.exe -m app.workers.retry_failed --limit 100
 ```
 
-## Runtime data
+## Google Calendar event editing
+
+The backend supports these authenticated endpoints:
+
+- `GET /api/v1/calendar/events`: list upcoming events, with `items` and Google's
+  optional `nextPageToken`. Pass `page_token` for the next page, `limit` (1–250),
+  and optional offset-aware `time_min` / `time_max` timestamps.
+- `POST /api/v1/calendar/events`: create an event; returns the Google event (201).
+- `PATCH /api/v1/calendar/events/{event_id}`: edit only supplied fields; returns
+  the updated Google event. Other fields, including existing guests, are preserved.
+
+All endpoints default to the user's `primary` calendar. Use `calendar_id` to
+target another calendar the user can access. Credentials are selected from the
+authenticated user; requests cannot supply a different user ID.
+
+The frontend Google authorization-code flow must request
+`https://www.googleapis.com/auth/calendar.events` instead of `calendar.readonly`.
+Add this scope to the Google OAuth consent configuration and ask existing users
+to reconnect with consent and offline access. Changing the backend scope alone
+does not upgrade existing read-only grants. Google Calendar API must be enabled
+for the OAuth project's credentials.
+
+Example create body:
+
+```json
+{
+  "summary": "Project planning",
+  "description": "Discuss next steps",
+  "location": "Office",
+  "start": {"dateTime": "2026-10-01T10:00:00+01:00"},
+  "end": {"dateTime": "2026-10-01T11:00:00+01:00"}
+}
+```
+
+For all-day events, use `{"date": "2026-10-01"}` for start and
+`{"date": "2026-10-02"}` for end (the end date is exclusive). Edits may contain
+just `{"summary": "New title"}`. When changing times, provide both start and end.
+Empty description/location strings clear those fields. Null fields are rejected.
+Guest notifications default to `send_updates=none`; the UI can explicitly request
+`send_updates=all` or `externalOnly` when saving edits to meetings with guests.
+
+Browser calls must include the session cookie (`credentials: "include"`) and
+`X-Requested-With: XmlHttpRequest` for mutations, as with other authenticated
+Umbra changes. After a successful save, refresh the event list. A 409 means the
+user must connect/reconnect; a 403 can mean missing edit consent or calendar
+permissions. If a write times out, refresh the list before retrying to avoid
+creating a duplicate event.
+
+This repository contains the backend only. The frontend still needs event list,
+create/edit forms, and the updated Google consent scope wired to these endpoints.
+Natural-language command execution remains unimplemented.
+
+See Google's [event creation](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)
+and [partial event update](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch) references.
+
+## Runtime data requirements
 
 Vector storage requires `PINECONE_API_KEY` and a configured Pinecone index.
 Embeddings use the actual Hugging Face model locally (default:

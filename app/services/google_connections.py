@@ -4,12 +4,14 @@ from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException
 from sqlalchemy import Column, MetaData, String, Table, Text, create_engine, delete, inspect, select, update
 from sqlalchemy.engine import make_url
 
 from app.core.config import settings
+
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
 
 metadata = MetaData()
 credentials = Table(
@@ -66,6 +68,22 @@ def list_statuses(user_id: str):
         rows = connection.execute(select(credentials.c.id, credentials.c.provider, credentials.c.connected_at)
                                   .where(credentials.c.user_id == user_id)).mappings().all()
     return [dict(row, status="connected") for row in rows]
+
+
+def load_refresh_token(user_id: str) -> str:
+    engine = get_engine()
+    encrypted = None
+    if inspect(engine).has_table(credentials.name):
+        with engine.connect() as connection:
+            encrypted = connection.scalar(select(credentials.c.encrypted_token).where(
+                credentials.c.user_id == user_id, credentials.c.provider == "gcal",
+            ))
+    if encrypted is None:
+        raise HTTPException(409, "Connect Google Calendar before managing events.")
+    try:
+        return cipher().decrypt(encrypted.encode()).decode()
+    except InvalidToken:
+        raise HTTPException(503, "Google connection could not be decrypted. Reconnect Google Calendar.") from None
 
 
 def disconnect(user_id: str, provider: str):

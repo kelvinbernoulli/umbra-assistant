@@ -6,6 +6,8 @@ from cryptography.fernet import Fernet
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from oauthlib.oauth2.rfc6749.parameters import parse_token_response
+import json
 
 
 from app.services import google_connections as store
@@ -20,7 +22,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(auth.settings, "CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr(auth.settings, "CREDENTIAL_DB_URL", f"sqlite:///{tmp_path / 'credentials.db'}")
     flow = Mock()
-    flow.credentials = SimpleNamespace(refresh_token="private-refresh-token")
+    flow.credentials = SimpleNamespace(refresh_token="private-refresh-token", has_scopes=lambda scopes: True)
     factory = Mock(return_value=flow)
     monkeypatch.setattr(auth.Flow, "from_client_config", factory)
     app = FastAPI()
@@ -95,6 +97,14 @@ def test_invalid_storage_key_fails_before_exchange(setup, monkeypatch):
     factory.assert_not_called()
 
 
+def test_readonly_consent_cannot_claim_event_edit_access(setup):
+    client, flow, _ = setup
+    flow.credentials.has_scopes = lambda scopes: False
+    response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
+    assert response.status_code == 400
+    assert store.list_statuses("user-one") == []
+
+
 def test_exchange_errors_do_not_expose_secrets(setup):
     client, flow, _ = setup
     flow.fetch_token.side_effect = RuntimeError("private-refresh-token test-secret")
@@ -112,3 +122,25 @@ def test_disconnect_only_removes_current_users_connection(setup):
     assert response.status_code == 200
     assert store.list_statuses("user-one") == []
     assert len(store.list_statuses("user-two")) == 1
+
+
+@pytest.mark.parametrize("calendar_granted", [True, False])
+def test_google_scope_change_requires_calendar_access(setup, monkeypatch, calendar_granted):
+    client, flow, _ = setup
+    monkeypatch.delenv("OAUTHLIB_RELAX_TOKEN_SCOPE", raising=False)
+    scopes = ["openid", "https://www.googleapis.com/auth/userinfo.email"]
+    if calendar_granted:
+        scopes.append(auth.CALENDAR_SCOPE)
+
+    def exchange(**kwargs):
+        return parse_token_response(json.dumps({
+            "access_token": "test-access-token",
+            "refresh_token": "test-refresh-token",
+            "token_type": "Bearer",
+            "scope": " ".join(scopes),
+        }), scope=[auth.CALENDAR_SCOPE])
+
+    flow.fetch_token.side_effect = exchange
+    response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
+    assert response.status_code == (200 if calendar_granted else 400)
+    assert bool(store.list_statuses("user-one")) == calendar_granted
