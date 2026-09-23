@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.deps import get_current_user_id
 from app.core.config import settings
 from app.services.google_connections import CALENDAR_SCOPE, cipher, save_refresh_token
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -55,7 +58,8 @@ def save_google_calendar_token(
             if not flow.credentials.has_scopes([CALENDAR_SCOPE]):
                 raise ValueError("Calendar event access was not granted")
             token = flow.credentials.refresh_token
-    except Exception:
+    except Exception as exc:
+        logger.error("Google Calendar token exchange failed: %r", exc)
         # OAuth exceptions can contain sensitive tokens or client credentials.
         raise HTTPException(400, "Google authorization failed. Please connect again.") from None
     if not token:

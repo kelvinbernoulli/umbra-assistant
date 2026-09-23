@@ -3,8 +3,10 @@ Umbra Assistant backend — FastAPI app factory.
 
 Run locally with:  uvicorn app.main:app --reload --port 8000
 """
-
 from __future__ import annotations
+
+from os import environ
+environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 from contextlib import asynccontextmanager
 
