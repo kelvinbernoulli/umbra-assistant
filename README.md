@@ -15,11 +15,44 @@ By leveraging a semantic vector database and open-source models, Umbra runs quie
 - `app/services/`: LLM orchestration and vector search logic.
 - `app/core/`: Configuration layouts and environment security.
 
+## Render PostgreSQL deployment
+
+The backend includes the PostgreSQL driver (`psycopg2-binary`). Create a Render
+Postgres database in the same region and account as the backend, then use its
+Internal Database URL for `DATABASE_URL` in the backend's Environment settings.
+Use a `postgresql://` URL (or `postgresql+psycopg2://`), not `postgres://`.
+Remove a SQLite `CREDENTIAL_DB_URL` override so Google integration credentials
+use `DATABASE_URL`, or set it to the same PostgreSQL URL. Keep the existing
+`CREDENTIAL_ENCRYPTION_KEY`.
+
+Set the Render Start Command to:
+
+```sh
+python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Deploy and check that Alembic upgrades to `0006_google_sessions` before the
+server starts. Verify Google sign-in and session restoration after a restart.
+OAuth credential storage creates its table on the first integration connection.
+
+Changing the URL creates an empty database; Alembic migrates schema, not existing
+SQLite rows. If existing data matters, back up and transfer the live SQLite data
+before changing environment settings or redeploying. Preserve user and workspace
+IDs (including their relationship to Pinecone data), and transfer any separate
+credential database with its encryption key. For a fresh start, users must sign
+in and reconnect integrations.
+
+Render's free Postgres databases expire after 30 days; select a suitable paid
+plan for ongoing use. See [Render Postgres setup](https://render.com/docs/postgresql-creating-connecting)
+and [free plan limits](https://render.com/docs/free).
+
 ## PostgreSQL integration tests
 
 The default test suite uses isolated SQLite databases. PostgreSQL checks are opt-in and read `POSTGRES_DATABASE_URL` from `.env`.
 
-If `POSTGRES_DATABASE_URL` is configured, integration tests run against it. Otherwise, they skip cleanly:
+Use a dedicated disposable database for `POSTGRES_DATABASE_URL`: these tests
+create and drop application tables. Never point it at the live database.
+If configured, integration tests run against it. Otherwise, they skip cleanly:
 
 ```powershell
 .\umbra-env\Scripts\python.exe -m pytest -m postgres -q

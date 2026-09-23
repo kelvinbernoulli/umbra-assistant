@@ -96,6 +96,12 @@ def _save_registry(sources: Iterable[str], document_types: Iterable[str]) -> Non
     _REGISTRY_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+# Database-backed listing and validation query the table directly. Persist the
+# built-ins before loading so a fresh database behaves like the JSON registry.
+# The upserts also repair existing empty registries without replacing custom rows.
+if _ENGINE is not None:
+    _save_registry(_DEFAULT_SOURCES, _DEFAULT_DOCUMENT_TYPES)
+
 _SOURCES, _DOCUMENT_TYPES = _load_registry()
 
 
