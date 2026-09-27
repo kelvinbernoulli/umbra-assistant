@@ -101,12 +101,19 @@ All endpoints default to the user's `primary` calendar. Use `calendar_id` to
 target another calendar the user can access. Credentials are selected from the
 authenticated user; requests cannot supply a different user ID.
 
-The frontend Google authorization-code flow must request
-`https://www.googleapis.com/auth/calendar.events` instead of `calendar.readonly`.
-Add this scope to the Google OAuth consent configuration and ask existing users
-to reconnect with consent and offline access. Changing the backend scope alone
-does not upgrade existing read-only grants. Google Calendar API must be enabled
-for the OAuth project's credentials.
+The current frontend and backend connection flow request `calendar.readonly`,
+which is sufficient for the event list and briefs. The backend verifies the
+scopes actually returned by Google and also accepts existing Calendar event or
+full Calendar grants. Future event editing UI must explicitly request
+`https://www.googleapis.com/auth/calendar.events` and explain the additional
+permissions. Existing read-only grants cannot write events. Google Calendar API
+must be enabled in the Google Cloud project that owns the OAuth client.
+
+If Calendar fails with 403, the backend distinguishes Google's reason codes:
+disabled API (503), quota/rate limits (429), missing consent (403), and organization
+policy (403). Unknown read failures no longer tell users they need edit access.
+Enable the API in Google Cloud for API-disabled errors; reconnect from Sources
+for missing-consent errors. Reconnecting cannot enable a disabled Cloud API.
 
 Example create body:
 
@@ -134,7 +141,7 @@ user must connect/reconnect; a 403 can mean missing edit consent or calendar
 permissions. If a write times out, refresh the list before retrying to avoid
 creating a duplicate event.
 
-This repository contains the backend only. The frontend still needs event list,
+This repository contains the backend only. The companion frontend reads live events; it still needs
 create/edit forms, and the updated Google consent scope wired to these endpoints.
 Natural-language command execution remains unimplemented.
 
@@ -148,4 +155,46 @@ Embeddings use the actual Hugging Face model locally (default:
 `BAAI/bge-large-en-v1.5`); its weights must be cached or downloadable.
 There is no in-memory vector store or synthetic embedding fallback.
 Model and storage failures propagate to callers and ingestion retry handling.
-Morning briefs and command execution return HTTP 501 until implemented.
+Command execution returns HTTP 501 until implemented. GET /api/v1/brief/today now returns a factual daily overview from live Google Calendar events and the latest 100 workspace records, without Pinecone or a language model. Pass an IANA timezone (for example, timezone=Africa/Lagos); UTC is the default. Calendar failures are returned as calendar_notice with a null calendar_count, while saved activity remains available. The calendar summary covers the first 250 events and sets calendar_has_more if further pages exist. When configured, Hugging Face synthesizes this overview into an AI daily brief; otherwise the factual overview remains available.
+
+
+## AI daily briefs (Hugging Face)
+
+`GET /api/v1/brief/today` uses the configured hosted chat model after reading the
+signed-in user's primary calendar and the authorized workspace's saved records.
+No Pinecone index, embedding model or local model download is needed for briefs.
+
+Set these variables in the backend environment (never in frontend VITE variables):
+
+```dotenv
+HUGGINGFACE_API_TOKEN=<token with Inference Providers permission>
+HUGGINGFACE_SYNTHESIS_MODEL=<provider-supported chat model ID or endpoint URL>
+HUGGINGFACE_INFERENCE_PROVIDER=auto
+BRIEF_AI_ENABLED=true
+BRIEF_LLM_TIMEOUT_SECONDS=15
+```
+
+The existing local model setting is preserved. Confirm that the model is served by
+an inference provider available to your Hugging Face account. A Hub model existing
+does not guarantee hosted inference availability. A 403 may require correcting
+token permissions or model/provider access. Configure the same variables on the
+backend host before deployment, install requirements, and restart the backend.
+Set `BRIEF_AI_ENABLED=false` to use only the factual overview.
+
+The prompt includes at most 20 events and 12 of the latest 100 saved records,
+with capped text fields, dates, timezone and partial-data markers. Raw OAuth
+credentials, account tokens, attendees and arbitrary record metadata are not sent.
+Event descriptions and saved text are sent to Hugging Face/the selected inference
+provider for processing. Each eligible brief load or refresh makes one generation
+request; generated text is not persisted or cached. Empty workspaces skip inference.
+The model receives no tools and cannot create events or execute commands.
+
+The API returns `summary_source=ai` after successful synthesis. Missing configuration,
+provider failure or incomplete output retains `summary_source=factual` and a public
+`summary_notice`. Calendar errors remain in `calendar_notice`, and numeric counts
+always come from source data. The frontend allows 90 seconds for calendar retrieval
+and synthesis; the configurable model response timeout defaults to 15 seconds.
+Provider errors are logged by exception class only, without prompts or tokens.
+AI prose is not independently fact-checked; source events remain visible for review.
+
+See the [Hugging Face inference client documentation](https://huggingface.co/docs/huggingface_hub/package_reference/inference_client).

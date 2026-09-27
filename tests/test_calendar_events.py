@@ -114,3 +114,35 @@ def test_revoked_refresh_token_requires_reconnect(calendar):
     response = client.get("/calendar/events", headers={"X-API-Key": "alice"})
     assert response.status_code == 409
     assert "private-token" not in response.text
+
+
+@pytest.mark.parametrize("reason,field,status,message", [
+    ("accessNotConfigured", "errors", 503, "API is disabled"),
+    ("SERVICE_DISABLED", "details", 503, "API is disabled"),
+    ("insufficientPermissions", "errors", 403, "read permission"),
+    ("ACCESS_TOKEN_SCOPE_INSUFFICIENT", "details", 403, "read permission"),
+    ("rateLimitExceeded", "errors", 429, "request limit"),
+    ("domainPolicy", "errors", 403, "administrator"),
+    ("unknown", "errors", 403, "read access"),
+])
+def test_read_errors_explain_the_actual_google_reason(calendar, reason, field, status, message):
+    client, session, _ = calendar
+    response = session.request.return_value
+    response.status_code = 403
+    response.ok = False
+    response.json.return_value = {"error": {field: [{"reason": reason, "message": "private-token"}]}}
+    result = client.get("/calendar/events", headers={"X-API-Key": "alice"})
+    assert result.status_code == status
+    assert message in result.json()["detail"]
+    assert "editable" not in result.text
+    assert "private-token" not in result.text
+
+
+@pytest.mark.parametrize("payload", [None, [], {"error": "bad"}, {"error": {"errors": None}}, {"error": {"errors": [None, {"reason": []}]}}])
+def test_malformed_google_error_still_has_a_safe_message(calendar, payload):
+    client, session, _ = calendar
+    session.request.return_value.status_code = 403
+    session.request.return_value.json.return_value = payload
+    response = client.get("/calendar/events", headers={"X-API-Key": "alice"})
+    assert response.status_code == 403
+    assert "read access" in response.json()["detail"]

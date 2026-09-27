@@ -11,7 +11,13 @@ from sqlalchemy.engine import make_url
 
 from app.core.config import settings
 
-CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+CALENDAR_READ_SCOPES = frozenset({
+    CALENDAR_SCOPE,
+    "https://www.googleapis.com/auth/calendar.events.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar",
+})
 
 metadata = MetaData()
 credentials = Table(

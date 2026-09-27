@@ -23,6 +23,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(auth.settings, "CREDENTIAL_DB_URL", f"sqlite:///{tmp_path / 'credentials.db'}")
     flow = Mock()
     flow.credentials = SimpleNamespace(refresh_token="private-refresh-token", has_scopes=lambda scopes: True)
+    flow.fetch_token.return_value = {"refresh_token": "private-refresh-token", "scope": store.CALENDAR_SCOPE}
     factory = Mock(return_value=flow)
     monkeypatch.setattr(auth.Flow, "from_client_config", factory)
     app = FastAPI()
@@ -51,6 +52,7 @@ def test_exchange_persists_encrypted_credentials_and_reports_status(setup):
     assert response.json()["status"] == "success"
     assert "private-refresh-token" not in response.text
     assert factory.call_args.kwargs["redirect_uri"] == "http://localhost:5173"
+    assert factory.call_args.kwargs["scopes"] == ["https://www.googleapis.com/auth/calendar.readonly"]
     flow.fetch_token.assert_called_once_with(code="one-use-code", timeout=20)
     with store.get_engine().connect() as connection:
         encrypted = connection.scalar(select(store.credentials.c.encrypted_token))
@@ -83,7 +85,7 @@ def test_client_cannot_choose_another_user(setup):
 
 def test_missing_refresh_token_does_not_claim_success(setup):
     client, flow, _ = setup
-    flow.credentials.refresh_token = None
+    flow.fetch_token.return_value["refresh_token"] = None
     response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
     assert response.status_code == 400
     assert store.list_statuses("user-one") == []
@@ -97,21 +99,23 @@ def test_invalid_storage_key_fails_before_exchange(setup, monkeypatch):
     factory.assert_not_called()
 
 
-def test_readonly_consent_cannot_claim_event_edit_access(setup):
+def test_requested_scopes_cannot_substitute_for_granted_calendar_access(setup):
     client, flow, _ = setup
-    flow.credentials.has_scopes = lambda scopes: False
+    flow.fetch_token.return_value["scope"] = "openid https://www.googleapis.com/auth/userinfo.email"
     response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
     assert response.status_code == 400
     assert store.list_statuses("user-one") == []
 
 
-def test_exchange_errors_do_not_expose_secrets(setup):
+def test_exchange_errors_do_not_expose_secrets(setup, caplog):
     client, flow, _ = setup
     flow.fetch_token.side_effect = RuntimeError("private-refresh-token test-secret")
     response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
     assert response.status_code == 400
     assert "private-refresh-token" not in response.text
     assert "test-secret" not in response.text
+    assert "private-refresh-token" not in caplog.text
+    assert "test-secret" not in caplog.text
 
 
 def test_disconnect_only_removes_current_users_connection(setup):
@@ -144,3 +148,18 @@ def test_google_scope_change_requires_calendar_access(setup, monkeypatch, calend
     response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
     assert response.status_code == (200 if calendar_granted else 400)
     assert bool(store.list_statuses("user-one")) == calendar_granted
+
+
+@pytest.mark.parametrize("scope", sorted(store.CALENDAR_READ_SCOPES))
+def test_existing_read_or_write_grants_can_connect(setup, scope):
+    client, flow, _ = setup
+    flow.fetch_token.return_value["scope"] = "openid " + scope
+    response = client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers())
+    assert response.status_code == 200
+
+
+def test_missing_granted_scopes_does_not_save_credentials(setup):
+    client, flow, _ = setup
+    flow.fetch_token.return_value.pop("scope")
+    assert client.post("/api/v1/auth/google/save", json={"code": "code"}, headers=headers()).status_code == 400
+    assert store.list_statuses("user-one") == []

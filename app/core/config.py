@@ -7,6 +7,7 @@ a real key here, stop and put it in .env instead.
 """
 
 from functools import lru_cache
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -43,6 +44,9 @@ class Settings(BaseSettings):
     HUGGINGFACE_EMBEDDING_MODEL: str | None = None
     HUGGINGFACE_EMBEDDING_DIM: int = 1024
     HUGGINGFACE_SYNTHESIS_MODEL: str | None = None  # e.g. an HF Inference Endpoint URL or model id
+    HUGGINGFACE_INFERENCE_PROVIDER: str = "auto"
+    BRIEF_AI_ENABLED: bool = True
+    BRIEF_LLM_TIMEOUT_SECONDS: float = Field(default=15, gt=0, le=30)
 
     # --- Webhooks / Integrations ---
     WHATSAPP_VERIFY_TOKEN: str | None = None
