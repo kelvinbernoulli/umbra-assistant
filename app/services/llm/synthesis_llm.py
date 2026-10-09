@@ -36,7 +36,7 @@ class SynthesisLLM:
             if choice.finish_reason != "stop" or not isinstance(content, str) or not content.strip():
                 raise ValueError("Incomplete model response")
             text = content.strip()
-            if len(text) > 2400:
+            if len(text) > 2500:
                 raise ValueError("Model response exceeded the brief limit")
             return text
         except Exception as exc:

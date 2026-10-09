@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
+    admin,
     brief,
     session_auth,
     auth,
@@ -19,6 +20,7 @@ from app.api.v1.routes.webhooks import calendar, email, whatsapp
 
 api_router = APIRouter()
 
+api_router.include_router(admin.router)
 api_router.include_router(whatsapp.router, tags=["webhooks"])
 api_router.include_router(email.router, tags=["webhooks"])
 api_router.include_router(calendar.router, tags=["webhooks"])

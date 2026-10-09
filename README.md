@@ -15,6 +15,20 @@ By leveraging a semantic vector database and open-source models, Umbra runs quie
 - `app/services/`: LLM orchestration and vector search logic.
 - `app/core/`: Configuration layouts and environment security.
 
+## Admin user analytics
+
+The admin dashboard provides a registered-user total, searchable user list, and
+per-user account/workspace summaries with active integration and stored-item
+counts. It does not expose stored message or event contents. Access is enforced
+by the backend using the signed-in Google account email; frontend navigation is
+not an authorization boundary.
+
+Set `ADMIN_EMAILS` in the backend environment to a JSON list of permitted email
+addresses, for example `["admin@example.com"]`. Email matching is
+case-insensitive. With an empty or unmatched allowlist, admin analytics requests
+are denied. The current schema does not track account creation time or sign-in
+activity, so those are not presented as user metrics.
+
 ## Render PostgreSQL deployment
 
 The backend includes the PostgreSQL driver (`psycopg2-binary`). Create a Render

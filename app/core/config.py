@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     SESSION_COOKIE_SECURE: bool = True
     SECRET_KEY: str | None = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    ADMIN_EMAILS: list[str] = []
 
     # --- Pinecone ---
     PINECONE_API_KEY: str | None = None
